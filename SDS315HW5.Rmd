@@ -1,0 +1,106 @@
+---
+title: "SDS315HW5"
+author: "Max Allen"
+date: "2024-02-26"
+output: html_document
+---
+Max Allen
+mca2773
+Github -> https://github.com/mallen17/SDS315HW4.git
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Problem 1
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(mosaic)
+library(ggplot2)
+sim_flag = do(10000)*nflip(n=2021, prob=0.024)
+ggplot(sim_flag) +
+  geom_histogram(aes(x=nflip))
+```
+
+I want to find whether the Iron Bank is getting flagged for illegal activity significantly higher than the standard flag rate which is .024. The null hypothesis would be that there is no significant difference in the Iron Bank's tendencies of getting flagged. The bank claimed they were flagged 70 times out of their last 2021 transactions, `r round(70/2021, 2)`. The plot above displays a distribution which should be expected if the null hypothesis is true. The amount proportion of instances of 70 or greater is `r sum(sim_flag >= 70)/10000`.This to be possible by sheer luck, but I believe it warrants further investigation into the Iron Bank as the value is unusually low.
+
+# Problem 2
+
+```{r echo=FALSE}
+sim_bites = do(10000)*nflip(n=50, prob=0.03)
+pbite = sum(sim_bites>=8)/10000
+ggplot(sim_bites) + 
+  geom_histogram(aes(x=nflip), binwidth = .5)
+```
+
+
+Here, I'm investigating whether or not Gourmet Bites gets more health violations than should be expected. The expected rate of violations for sound businesses-the null hypothesis-is 3%. Gourmet Bites received violations in `r (8/50)*100`% of their 50 inspections. The graph above shows the expected distribution of violations should Gourmet Bites be a regular upstanding business. The p-value ends up being `r pbite`. A value that low is extremely improbable, and I would believe that the null hypothesis should be rejected and Gourmet Bites' should be investigated.
+
+
+# Problem 3
+
+For this problem I will be investigating whether sentences are watermarked: created and imprinted by an AI generation tool, or if they are natural English sentences. I will have to do this in two parts, first create a basis by comparing natural sentences to the expected letter counts and then using this basis to test the ten given sentences.
+
+### Part A
+
+```{r echo=FALSE, message=FALSE}
+brown = readLines("brown_sentences.txt")
+letter_freq = read_csv("letter_frequencies.csv")
+
+
+
+calculate_chi_squared = function(sentence, freq_table = letter_freq) {
+  
+  # Ensure letter frequencies are normalized and sum to 1
+  freq_table$Probability = freq_table$Probability / sum(freq_table$Probability)
+  
+  # Remove non-letters and convert to uppercase
+  clean_sentence = gsub("[^A-Za-z]", "", sentence)
+  clean_sentence = toupper(clean_sentence)
+  
+  # Count the occurrences of each letter in the sentence
+  observed_counts = table(factor(strsplit(clean_sentence, "")[[1]], levels = freq_table$Letter))
+  
+  # Calculate expected counts
+  total_letters = sum(observed_counts)
+  expected_counts = total_letters * freq_table$Probability
+  
+  # Chi-squared statistic
+  chi_squared_stat = sum((observed_counts - expected_counts)^2 / expected_counts)
+  
+  return(chi_squared_stat)
+}
+brown_chi2 = sapply(brown, calculate_chi_squared, freq_table = letter_freq)
+```
+
+Now I have a null distribution that has `r length(brown_chi2)` entries of normal sentences and their chi-squared values that I can use for part B.
+
+### Part B
+
+```{r echo=FALSE}
+sentences <- c(
+  "She opened the book and started to read the first chapter, eagerly anticipating what might come next.",
+  "Despite the heavy rain, they decided to go for a long walk in the park, crossing the main avenue by the fountain in the center.",
+  "The museum’s new exhibit features ancient artifacts from various civilizations around the world.",
+  "He carefully examined the document, looking for any clues that might help solve the mystery.",
+  "The students gathered in the auditorium to listen to the guest speaker’s inspiring lecture.",
+  "Feeling vexed after an arduous and zany day at work, she hoped for a peaceful and quiet evening at home, cozying up after a quick dinner with some TV, or maybe a book on her upcoming visit to Auckland.",
+  "The chef demonstrated how to prepare a delicious meal using only locally sourced ingredients, focusing mainly on some excellent dinner recipes from Spain.",
+  "They watched the sunset from the hilltop, marveling at the beautiful array of colors in the sky.",
+  "The committee reviewed the proposal and provided many points of useful feedback to improve the project’s effectiveness.",
+  "Despite the challenges faced during the project, the team worked tirelessly to ensure its successful completion, resulting in a product that exceeded everyone’s expectations."
+)
+compare_sentences = function(sentence, null_distribution){
+  test_stat = calculate_chi_squared(sentence)
+  p_value = sum(null_distribution>=test_stat)/length(null_distribution)
+  return(p_value)
+}
+sent_chi2 = c(1:10)
+for (i in 1:10) {
+  sent_chi2[i] = compare_sentences(sentences[i], brown_chi2)
+}
+sent_chi2
+```
+
+Above are printed the 10 p-values for each sentence in order. This value represents the proportion of chi-squared values in the distribution from part A that as large or larger than the given sentence's chi-squared score. The sixth sentence must be the one that was affected by watermarking. Every other p-value is .05 or greater, yet it sits at `r min(sent_chi2)`. This means only `r round(min(sent_chi2), 4)*100`% of the brown sentences have a more irregular distribution.
